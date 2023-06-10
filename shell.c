@@ -92,9 +92,10 @@ void process_input(char *user_input) {
     char *cmds[MAX_NUMBER_OF_PIPES][MAX_CMD_LENGTH];
     char *token = strtok(user_input, "|");
 
+    // TODO test edge cases with odd command input 
     while (token) {
         int num_tokens = 0;
-        char *subtoken = strtok(token, " ");
+        char *subtoken = strtok(token, " "); // TODO check if to replace with strtok_r
         while (subtoken) {
             cmds[num_pipes][num_tokens++] = subtoken;
             subtoken = strtok(NULL, " ");
