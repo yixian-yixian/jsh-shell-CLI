@@ -6,8 +6,8 @@
 #include <sys/wait.h>
 #include <string.h>
 
-#define MAX_CMD_LENGTH 100
-#define MAX_NUMBER_OF_PIPES 1024
+#define MAX_CMD_LENGTH 1000
+#define MAX_NUMBER_OF_PIPES 20
 #define CHILD_PROCESS 127
 
 
@@ -45,7 +45,10 @@ void create_pipes(int pipefds[], int num_pipes) {
  */
 void close_all_pipes(int pipefds[], int num_pipes) {
     for (int i = 0; i < 2 * num_pipes; i++) {
-        close(pipefds[i]);
+        if (close(pipefds[i]) < 0) {
+            perror("jsh$ error: failed to close pipe");
+            exit(1);
+        }
     }
 }
 
@@ -81,9 +84,8 @@ void redirect_execution(char* cmd[], int pipefds[],
  *       when child process fails to launch:
  *         the function exit with status 127
  */
-void launch_child_process(char* cmds[][MAX_CMD_LENGTH],
-    int pipefds[], int num_pipes) {
-    int pid = 0;
+void launch_child_process(char** cmds[], int pipefds[], pid_t pids[], int num_pipes) {
+    pid_t pid = 0;
     for (int i = 0; i < num_pipes; i++) {
         pid = fork();   // create child process
         if (pid == 0) { // child process created
@@ -92,6 +94,7 @@ void launch_child_process(char* cmds[][MAX_CMD_LENGTH],
         else if (pid < 0) {
             exit(CHILD_PROCESS);
         }
+        pids[i] = pid;
     }
 }
 
@@ -103,7 +106,14 @@ void process_input(char* user_input) {
     int num_pipes = 0;
 
     // parse user input into pipes
-    char* cmds[MAX_NUMBER_OF_PIPES][MAX_CMD_LENGTH];
+    char** cmds[MAX_NUMBER_OF_PIPES];
+    for (int i = 0; i < MAX_NUMBER_OF_PIPES; i++) {
+        cmds[i] = malloc(sizeof(char*) * CMD_LENGTH);
+        if (!cmds[i]) {
+            perror("malloc");
+            exit(1);
+        }
+    }
     char* token = strtok(user_input, "|");
 
     while (token) {
@@ -124,36 +134,71 @@ void process_input(char* user_input) {
     create_pipes(pipefds, num_pipes);
 
     // launch child processes
-    launch_child_process(cmds, pipefds, num_pipes);
+    pid_t pids[MAX_NUMBER_OF_PIPES];
+    launch_child_process(cmds, pipefds, pids, num_pipes);
 
     // close pipes
     close_all_pipes(pipefds, num_pipes);
 
+    // wait for last child process to finish
     int child_status = 0;
-    int pid;
-    // wait for any child process to finish
-    while ((pid = wait(&child_status)) > 0);
-    if (WIFEXITED(child_status)) {
-        fprintf(stdout, "jsh status: %d\n",
-            WEXITSTATUS(child_status));
+    for (int i = 0; i < num_pipes; i++) {
+        if (waitpid(pids[i], &child_status, 0) == -1) {
+            perror("waitpid");
+            exit(1);
+        }
+    }
+    if (WIFEXITED(child_status))
+        fprintf(stdout, "jsh status: %d\n", WEXITSTATUS(child_status));
+
+    // free allocated parsed cmd memory
+    for (int i = 0; i < num_pipes; i++) {
+        free(cmds[i]);
     }
 }
 
-
-
 /* driver function */
 int main() {
-    char user_input[MAX_CMD_LENGTH];
+    char* user_input = calloc(CMD_LENGTH, sizeof(char));
+    size_t buf_size = CMD_LENGTH;
+    size_t input_length = 0;
     fprintf(stdout, "jsh$ ");
-    while (fgets(user_input, MAX_CMD_LENGTH, stdin) != NULL) {
-        // remove newline from user input
-        user_input[strcspn(user_input, "\n")] = 0;
-        if (strcmp(user_input, "exit") == 0)
-            exit(0);
-        else
-            process_input(user_input);
 
-        fprintf(stdout, "jsh$ ");
+    // read user input char by char
+    int c;
+    while (1) {
+        c = fgetc(stdin);
+        if (c == EOF && ferror(stdin)) {
+            perror("fgetc");
+            free(user_input);
+            exit(1);
+        }
+        // expand buffer size if full
+        if (input_length == buf_size - 1) {
+            buf_size *= 2;
+            user_input = realloc(user_input, buf_size * sizeof(char));
+            if (!user_input) {
+                perror("realloc");
+                exit(1);
+            }
+        }
+        if (c == '\n') {
+            user_input[input_length] = '\0';
+            // exit program if user enters "exit"
+            if (strcmp(user_input, "exit") == 0) {
+                free(user_input);
+                exit(0);
+            }
+            else {
+                process_input(user_input);
+            }
+            input_length = 0; // reset input length
+            fprintf(stdout, "jsh$ ");
+        }
+        else // add char to user_input
+            user_input[input_length++] = c;
     }
+
+    free(user_input);
     return 0;
 }
