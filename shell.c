@@ -7,7 +7,7 @@
 #include <string.h>
 
 #define MAX_CMD_LENGTH 1000
-#define MAX_NUMBER_OF_PIPES 20
+#define MAX_NUMBER_OF_PIPES 40
 #define CHILD_PROCESS 127
 
 
