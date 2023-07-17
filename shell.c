@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "process_handler.h"
 
-/* driver function */
 /* driver function */
 int main() {
     char* user_input = calloc(MAX_CMD_LENGTH, sizeof(char));
