@@ -6,14 +6,17 @@ LDFLAGS=
 LDLIBS=
 PROGRAM=shell
 
-all: $(PROGRAM)
+all: $(PROGRAM) 
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
-$(PROGRAM): $(PROGRAM).o
-	$(LD) $(CPPFLAGS) $(LDFLAGS) $(LDLIBS) -o $@ $<
+process_handler.o: process_handler.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
-.PHONY:
+$(PROGRAM): process_handler.o $(PROGRAM).o 
+	$(LD) $(CPPFLAGS) $(LDFLAGS) $(LDLIBS) -o $@ $^
+
+.PHONY: clean
 clean:
 	rm -f *.o $(PROGRAM)
